@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>주차 위치 찾기</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0e0f11;
+    --bg2: #161719;
+    --bg3: #1e2023;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #f0f0ee;
+    --muted: #7a7a78;
+    --accent: #e8ff5a;
+    --accent-dim: rgba(232,255,90,0.12);
+    --accent-text: #1a1a00;
+    --danger: #ff5a5a;
+    --danger-dim: rgba(255,90,90,0.1);
+    --amber: #ffb740;
+    --amber-dim: rgba(255,183,64,0.12);
+    --green: #4dff9e;
+    --green-dim: rgba(77,255,158,0.1);
+    --radius: 14px;
+    --radius-sm: 8px;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Noto Sans KR', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { display: flex; flex-direction: column; max-width: 430px; margin: 0 auto; min-height: 100vh; position: relative; }
+
+  /* ── SCREENS ── */
+  .screen { display: none; flex-direction: column; flex: 1; overflow-y: auto; padding: 0 0 80px; }
+  .screen.active { display: flex; }
+
+  /* ── TOPBAR ── */
+  .topbar { padding: 20px 20px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+  .topbar-sub { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 430px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; z-index: 100; }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 10px 0 12px; cursor: pointer; gap: 4px; font-size: 11px; color: var(--muted); transition: color 0.15s; }
+  .nav-item svg { width: 22px; height: 22px; }
+  .nav-item.active { color: var(--accent); }
+
+  /* ── CARDS ── */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin: 0 16px 12px; }
+  .card-label { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .card-value { font-size: 14px; color: var(--text); }
+
+  /* ── HERO CARD ── */
+  .hero-card { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius); margin: 0 16px 12px; overflow: hidden; cursor: pointer; transition: border-color 0.2s; }
+  .hero-card:hover { border-color: rgba(255,255,255,0.2); }
+  .hero-img { width: 100%; height: 140px; object-fit: cover; display: block; background: var(--bg3); }
+  .hero-img-placeholder { width: 100%; height: 140px; background: var(--bg3); display: flex; align-items: center; justify-content: center; }
+  .hero-body { padding: 14px 16px 16px; }
+  .hero-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .hero-time { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .hero-timer-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+
+  /* ── TIMER ── */
+  .timer-big { font-size: 36px; font-weight: 700; font-family: var(--mono); letter-spacing: 0.04em; }
+  .timer-ok { color: var(--green); }
+  .timer-warn { color: var(--amber); }
+  .timer-over { color: var(--danger); }
+  .timer-bar-track { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .timer-bar-fill { height: 100%; border-radius: 2px; transition: width 1s linear, background 1s; }
+
+  /* ── BADGE ── */
+  .badge { display: inline-block; font-size: 11px; font-family: var(--mono); padding: 3px 8px; border-radius: 100px; }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-amber { background: var(--amber-dim); color: var(--amber); }
+  .badge-danger { background: var(--danger-dim); color: var(--danger); }
+  .badge-accent { background: var(--accent-dim); color: var(--accent); }
+
+  /* ── MAP MOCK ── */
+  .map-box { width: 100%; height: 180px; background: var(--bg3); border-radius: var(--radius-sm); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .map-grid { position: absolute; inset: 0; opacity: 0.06; background-image: linear-gradient(var(--text) 1px, transparent 1px), linear-gradient(90deg, var(--text) 1px, transparent 1px); background-size: 32px 32px; }
+  .map-pin { width: 32px; height: 40px; position: relative; }
+  .map-pin-head { width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); position: absolute; top: 0; left: 0; }
+  .map-pin-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bg); position: absolute; top: 11px; left: 11px; }
+  .map-pin-tail { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid var(--accent); position: absolute; bottom: 0; left: 8px; }
+  .map-coords { position: absolute; bottom: 10px; right: 10px; font-size: 10px; font-family: var(--mono); color: var(--muted); background: var(--bg2); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); }
+  .map-acc { position: absolute; top: 10px; left: 10px; }
+
+  /* ── BUTTONS ── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 11px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: transparent; cursor: pointer; font-size: 14px; color: var(--text); font-family: var(--sans); font-weight: 500; transition: background 0.15s, border-color 0.15s; }
+  .btn:hover { background: var(--bg3); }
+  .btn-accent { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+  .btn-accent:hover { background: #d4eb40; border-color: #d4eb40; }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger-dim); }
+  .btn-full { width: 100%; }
+  .btn-icon { width: 38px; height: 38px; padding: 0; border-radius: 50%; }
+
+  /* ── FORM ── */
+  .form-group { margin: 0 16px 12px; }
+  .form-label { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; display: block; }
+  input[type=text], input[type=number], textarea { width: 100%; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 11px 14px; font-size: 14px; font-family: var(--sans); color: var(--text); outline: none; transition: border-color 0.15s; }
+  input[type=text]:focus, input[type=number]:focus, textarea:focus { border-color: var(--accent); }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  textarea { resize: none; height: 80px; }
+
+  /* ── TOGGLE ── */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .toggle { position: relative; width: 44px; height: 24px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: var(--bg3); border-radius: 12px; cursor: pointer; border: 1px solid var(--border2); transition: background 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; background: var(--muted); border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+  .toggle input:checked + .toggle-slider { background: var(--accent-dim); border-color: var(--accent); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: var(--accent); }
+
+  /* ── PHOTO ── */
+  .photo-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius-sm); padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .photo-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+  .photo-zone input { display: none; }
+  .photo-preview { width: 100%; border-radius: var(--radius-sm); max-height: 180px; object-fit: cover; display: block; }
+
+  /* ── HISTORY LIST ── */
+  .hist-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s; }
+  .hist-item:hover { background: var(--bg2); }
+  .hist-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--bg3); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 18px; overflow: hidden; }
+  .hist-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .hist-info { flex: 1; min-width: 0; }
+  .hist-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hist-meta { font-size: 11px; font-family: var(--mono); color: var(--muted); margin-top: 2px; }
+
+  /* ── EMPTY ── */
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 12px; color: var(--muted); text-align: center; }
+  .empty-icon { font-size: 40px; opacity: 0.4; }
+  .empty-title { font-size: 16px; font-weight: 500; color: var(--text); opacity: 0.5; }
+  .empty-desc { font-size: 13px; line-height: 1.6; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* ── SECTION HDR ── */
+  .section-hdr { padding: 16px 16px 8px; font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* ── DETAIL ── */
+  .detail-photo { width: 100%; max-height: 220px; object-fit: cover; display: block; border-radius: var(--radius) var(--radius) 0 0; }
+
+  /* ── PULSE ── */
+  @keyframes ping { 0%,100% { transform: scale(1); opacity:1; } 50% { transform: scale(1.6); opacity:0; } }
+  .ping { animation: ping 1.5s ease-in-out infinite; }
+
+  /* ── FADE IN ── */
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  .fadein { animation: fadeUp 0.25s ease-out both; }
+
+  /* SCROLL */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ══ SCREEN: HOME ══ -->
+<div id="s-home" class="screen active">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">주차 위치</div>
+      <div class="topbar-sub" id="home-sub">저장된 위치 없음</div>
+    </div>
+    <button class="btn btn-accent" onclick="goSave()" style="padding:9px 16px;font-size:13px;">+ 저장</button>
+  </div>
+  <div id="home-content"></div>
+</div>
+
+<!-- ══ SCREEN: SAVE ══ -->
+<div id="s-save" class="screen">
+  <div class="topbar">
+    <button class="btn btn-icon" onclick="goHome()" style="font-size:18px;">←</button>
+    <div class="topbar-title" style="flex:1;text-align:center;">위치 저장</div>
+    <div style="width:38px;"></div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">현재 위치</label>
+    <div class="map-box" id="save-map">
+      <div class="map-grid"></div>
+      <div class="map-pin">
+        <div class="map-pin-head"></div>
+        <div class="map-pin-dot"></div>
+        <div class="map-pin-tail"></div>
+      </div>
+      <div class="map-coords" id="save-coords">위치 불러오는 중...</div>
+      <div class="map-acc" id="save-acc"></div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="f-name">장소 이름</label>
+    <input type="text" id="f-name" placeholder="예: 롯데몰 B2 주차장 A-14" />
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="f-memo">메모</label>
+    <textarea id="f-memo" placeholder="층, 구역, 기둥 번호, 특이사항 등"></textarea>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">사진 첨부</label>
+    <div class="photo-zone" id="photo-zone" onclick="document.getElementById('photo-input').click()">
+      <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)" />
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5"><rect x="2" y="6" width="20" height="15" rx="3"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 6V5a2 2 0 012-2h4a2 2 0 012 2v1"/></svg>
+      <span style="font-size:13px;color:var(--muted);">탭해서 사진 촬영 / 선택</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <div class="toggle-row">
+      <div>
+        <div class="form-label" style="margin-bottom:2px;">주차 시간 제한 타이머</div>
+        <div style="font-size:12px;color:var(--muted);">시간 만료 전 표시됩니다</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="timer-toggle" onchange="toggleTimerRow()" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="timer-row" style="display:none;margin-top:12px;">
+      <label class="form-label">제한 시간 (분)</label>
+      <input type="number" id="f-time" placeholder="예: 120" min="1" max="1440" style="width:140px;" />
+    </div>
+  </div>
+
+  <div style="padding: 0 16px 16px;">
+    <button class="btn btn-accent btn-full" onclick="savePark()" style="padding:14px;">이 위치 저장하기</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN: DETAIL ══ -->
+<div id="s-detail" class="screen">
+  <div id="detail-content"></div>
+</div>
+
+<!-- ══ SCREEN: HISTORY ══ -->
+<div id="s-history" class="screen">
+  <div class="topbar">
+    <div class="topbar-title">기록</div>
+    <div class="topbar-sub" id="hist-count">0개</div>
+  </div>
+  <div id="hist-list"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item active" id="nav-home" onclick="switchNav('home')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/></svg>
+    홈
+  </div>
+  <div class="nav-item" id="nav-history" onclick="switchNav('history')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    기록
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let data = JSON.parse(localStorage.getItem('pk_v2') || '[]');
+let gps = null;
+let photoDataUrl = null;
+let timerRaf = null;
+let currentDetailId = null;
+
+function save() { localStorage.setItem('pk_v2', JSON.stringify(data)); }
+
+// ── NAV ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+}
+function switchNav(tab) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-' + tab).classList.add('active');
+  if (tab === 'home') { renderHome(); showScreen('home'); }
+  if (tab === 'history') { renderHistory(); showScreen('history'); }
+}
+
+// ── HOME ──
+function goHome() {
+  cancelAnimationFrame(timerRaf);
+  renderHome();
+  showScreen('home');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-home').classList.add('active');
+}
+
+function renderHome() {
+  const el = document.getElementById('home-content');
+  const sub = document.getElementById('home-sub');
+  if (data.length === 0) {
+    sub.textContent = '저장된 위치 없음';
+    el.innerHTML = `<div class="empty fadein">
+      <div class="empty-icon">🅿</div>
+      <div class="empty-title">아직 저장된 위치가 없어요</div>
+      <div class="empty-desc">주차 후 [+ 저장] 버튼을 눌러<br>현재 위치를 기록해 보세요</div>
+    </div>`;
+    return;
+  }
+  const latest = data[0];
+  sub.textContent = data.length + '개 저장됨';
+  let timerHtml = '';
+  if (latest.timeLimitMins > 0) {
+    const elapsed = (Date.now() - latest.savedAt) / 60000;
+    const rem = latest.timeLimitMins - elapsed;
+    if (rem > 0) {
+      timerHtml = `<div class="hero-timer-row"><span class="badge badge-accent" id="home-timer-badge">--:--</span><span style="font-size:12px;color:var(--muted);">남음 / ${latest.timeLimitMins}분 제한</span></div>
+      <div class="timer-bar-track"><div class="timer-bar-fill" id="home-timer-bar"></div></div>`;
+    } else {
+      timerHtml = `<div class="hero-timer-row"><span class="badge badge-danger">시간 초과</span></div>`;
+    }
+  }
+  const photoEl = latest.photo
+    ? `<img src="${latest.photo}" class="hero-img" alt="주차 사진" />`
+    : `<div class="hero-img-placeholder"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="3"/></svg></div>`;
+
+  el.innerHTML = `
+    <div class="section-hdr">현재 위치</div>
+    <div class="hero-card fadein" onclick="showDetail(${latest.id})">
+      ${photoEl}
+      <div class="hero-body">
+        <div class="hero-name">${latest.name}</div>
+        <div class="hero-time">${fmtTime(latest.savedAt)}</div>
+        ${timerHtml}
+        ${latest.memo ? `<div style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.5;">${latest.memo}</div>` : ''}
+      </div>
+    </div>
+    ${data.length > 1 ? `<div class="section-hdr">이전 기록</div>` + data.slice(1,4).map(p => histItemHtml(p)).join('') : ''}
+  `;
+  if (latest.timeLimitMins > 0) startHomeTimer(latest);
+}
+
+function startHomeTimer(p) {
+  cancelAnimationFrame(timerRaf);
+  function tick() {
+    const el = document.getElementById('home-timer-badge');
+    const bar = document.getElementById('home-timer-bar');
+    if (!el) return;
+    const elapsed = (Date.now() - p.savedAt) / 60000;
+    const rem = p.timeLimitMins - elapsed;
+    if (rem <= 0) { el.textContent = '00:00'; el.className = 'badge badge-danger'; if (bar) { bar.style.width='0%'; bar.style.background='var(--danger)'; } return; }
+    const mins = Math.floor(rem);
+    const secs = Math.floor((rem - mins) * 60);
+    el.textContent = pad(mins) + ':' + pad(secs);
+    const pct = Math.max(0, (rem / p.timeLimitMins) * 100);
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.style.background = rem < 10 ? 'var(--danger)' : rem < 30 ? 'var(--amber)' : 'var(--green)';
+    }
+    if (rem < 10) el.className = 'badge badge-danger';
+    else if (rem < 30) el.className = 'badge badge-amber';
+    else el.className = 'badge badge-accent';
+    timerRaf = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function histItemHtml(p) {
+  const thumbHtml = p.photo
+    ? `<div class="hist-thumb"><img src="${p.photo}" alt="사진" /></div>`
+    : `<div class="hist-thumb">🅿</div>`;
+  return `<div class="hist-item" onclick="showDetail(${p.id})">${thumbHtml}<div class="hist-info"><div class="hist-name">${p.name}</div><div class="hist-meta">${fmtTime(p.savedAt)}${p.timeLimitMins?' · '+p.timeLimitMins+'분 제한':''}</div></div></div>`;
+}
+
+// ── SAVE ──
+function goSave() {
+  showScreen('save');
+  photoDataUrl = null;
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-memo').value = '';
+  document.getElementById('f-time').value = '';
+  document.getElementById('timer-toggle').checked = false;
+  document.getElementById('timer-row').style.display = 'none';
+  document.getElementById('photo-zone').innerHTML = `
+    <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)" />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5"><rect x="2" y="6" width="20" height="15" rx="3"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 6V5a2 2 0 012-2h4a2 2 0 012 2v1"/></svg>
+    <span style="font-size:13px;color:var(--muted);">탭해서 사진 촬영 / 선택</span>`;
+  document.getElementById('photo-zone').onclick = () => document.getElementById('photo-input').click();
+  document.getElementById('save-coords').textContent = '위치 불러오는 중...';
+  document.getElementById('save-acc').innerHTML = '';
+  gps = null;
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      gps = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) };
+      document.getElementById('save-coords').textContent = gps.lat.toFixed(5) + ', ' + gps.lng.toFixed(5);
+      document.getElementById('save-acc').innerHTML = `<span class="badge badge-green">±${gps.acc}m</span>`;
+    }, () => {
+      gps = { lat: 37.45632, lng: 126.70521, acc: 0, demo: true };
+      document.getElementById('save-coords').textContent = gps.lat.toFixed(5) + ', ' + gps.lng.toFixed(5);
+      document.getElementById('save-acc').innerHTML = `<span class="badge badge-amber">데모</span>`;
+    }, { timeout: 8000, enableHighAccuracy: true });
+  } else {
+    gps = { lat: 37.45632, lng: 126.70521, acc: 0, demo: true };
+    document.getElementById('save-coords').textContent = gps.lat.toFixed(5) + ', ' + gps.lng.toFixed(5);
+    document.getElementById('save-acc').innerHTML = `<span class="badge badge-amber">데모</span>`;
+  }
+}
+
+function toggleTimerRow() {
+  document.getElementById('timer-row').style.display = document.getElementById('timer-toggle').checked ? 'block' : 'none';
+}
+
+function handlePhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    photoDataUrl = ev.target.result;
+    const zone = document.getElementById('photo-zone');
+    zone.innerHTML = `<img src="${photoDataUrl}" class="photo-preview" alt="첨부 사진" /><div style="margin-top:8px;font-size:12px;color:var(--muted);">탭해서 변경</div>
+      <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)" style="display:none;" />`;
+    zone.onclick = () => document.getElementById('photo-input').click();
+  };
+  reader.readAsDataURL(file);
+}
+
+function savePark() {
+  if (!gps) { alert('위치를 불러오는 중입니다. 잠시 후 다시 시도해주세요.'); return; }
+  const name = document.getElementById('f-name').value.trim() || '주차 위치';
+  const memo = document.getElementById('f-memo').value.trim();
+  const useTimer = document.getElementById('timer-toggle').checked;
+  const timeLimitMins = useTimer ? parseInt(document.getElementById('f-time').value) || 0 : 0;
+  const p = { id: Date.now(), name, memo, lat: gps.lat, lng: gps.lng, acc: gps.acc, demo: !!gps.demo, savedAt: Date.now(), timeLimitMins, photo: photoDataUrl };
+  data.unshift(p);
+  if (data.length > 30) data = data.slice(0, 30);
+  save();
+  goHome();
+}
+
+// ── DETAIL ──
+function showDetail(id) {
+  cancelAnimationFrame(timerRaf);
+  currentDetailId = id;
+  const p = data.find(x => x.id === id);
+  if (!p) return;
+  const el = document.getElementById('detail-content');
+  const photoEl = p.photo ? `<img src="${p.photo}" class="detail-photo" alt="주차 사진" />` : '';
+  const coordsUrl = `https://maps.google.com/?q=${p.lat},${p.lng}`;
+  let timerSection = '';
+  if (p.timeLimitMins > 0) {
+    timerSection = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span class="card-label" style="margin-bottom:0;">타이머</span>
+          <span id="d-timer-badge" class="badge badge-accent">--:--</span>
+        </div>
+        <div class="timer-big timer-ok" id="d-timer-display">--:--</div>
+        <div class="timer-bar-track" style="margin-top:12px;height:6px;"><div class="timer-bar-fill" id="d-timer-bar" style="width:100%;background:var(--green);"></div></div>
+        <div style="margin-top:8px;font-size:12px;color:var(--muted);">총 ${p.timeLimitMins}분 제한 · ${fmtTime(p.savedAt)} 저장</div>
+      </div>`;
+  }
+  el.innerHTML = `
+    <div class="fadein">
+      <div style="padding:16px;display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-icon" onclick="goBack()" style="font-size:18px;flex-shrink:0;">←</button>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-top:2px;">${fmtTime(p.savedAt)}</div>
+        </div>
+      </div>
+      ${photoEl}
+      <div style="padding:0 0 8px;">
+        <div class="card">
+          <div class="card-label">위치</div>
+          <div class="map-box" style="margin-bottom:10px;">
+            <div class="map-grid"></div>
+            <div class="map-pin"><div class="map-pin-head"></div><div class="map-pin-dot"></div><div class="map-pin-tail"></div></div>
+            <div class="map-coords">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>
+            ${p.demo ? `<div class="map-acc"><span class="badge badge-amber">데모 위치</span></div>` : `<div class="map-acc"><span class="badge badge-green">±${p.acc}m</span></div>`}
+          </div>
+          <a href="${coordsUrl}" target="_blank" class="btn btn-full" style="text-decoration:none;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="3"/></svg>
+            구글 지도로 열기
+          </a>
+        </div>
+        ${p.memo ? `<div class="card"><div class="card-label">메모</div><div class="card-value" style="line-height:1.6;">${p.memo}</div></div>` : ''}
+        ${timerSection}
+        <div style="padding:0 16px 16px;display:flex;gap:8px;">
+          <button class="btn btn-danger" style="flex:1;justify-content:center;" onclick="deletePark(${p.id})">삭제</button>
+        </div>
+      </div>
+    </div>`;
+  showScreen('detail');
+  if (p.timeLimitMins > 0) startDetailTimer(p);
+}
+
+function startDetailTimer(p) {
+  cancelAnimationFrame(timerRaf);
+  function tick() {
+    const disp = document.getElementById('d-timer-display');
+    const badge = document.getElementById('d-timer-badge');
+    const bar = document.getElementById('d-timer-bar');
+    if (!disp) return;
+    const elapsed = (Date.now() - p.savedAt) / 60000;
+    const rem = p.timeLimitMins - elapsed;
+    if (rem <= 0) {
+      disp.textContent = '00:00'; disp.className = 'timer-big timer-over';
+      if (badge) { badge.textContent = '초과'; badge.className = 'badge badge-danger'; }
+      if (bar) { bar.style.width = '0%'; bar.style.background = 'var(--danger)'; }
+      return;
+    }
+    const mins = Math.floor(rem);
+    const secs = Math.floor((rem - mins) * 60);
+    disp.textContent = pad(mins) + ':' + pad(secs);
+    const pct = Math.max(0, (rem / p.timeLimitMins) * 100);
+    if (rem < 10) { disp.className='timer-big timer-over'; if(badge){badge.textContent='곧 만료';badge.className='badge badge-danger';} if(bar){bar.style.background='var(--danger)';} }
+    else if (rem < 30) { disp.className='timer-big timer-warn'; if(badge){badge.textContent='주의';badge.className='badge badge-amber';} if(bar){bar.style.background='var(--amber)';} }
+    else { disp.className='timer-big timer-ok'; if(badge){badge.textContent='여유';badge.className='badge badge-accent';} if(bar){bar.style.background='var(--green)';} }
+    if (bar) bar.style.width = pct + '%';
+    timerRaf = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function deletePark(id) {
+  if (!confirm('이 주차 기록을 삭제할까요?')) return;
+  cancelAnimationFrame(timerRaf);
+  data = data.filter(x => x.id !== id);
+  save();
+  goHome();
+}
+
+function goBack() {
+  cancelAnimationFrame(timerRaf);
+  // return to whichever was active before
+  goHome();
+}
+
+// ── HISTORY ──
+function renderHistory() {
+  const el = document.getElementById('hist-list');
+  const cnt = document.getElementById('hist-count');
+  cnt.textContent = data.length + '개';
+  if (data.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon" style="font-size:32px;">🕐</div><div class="empty-title">기록 없음</div><div class="empty-desc">저장한 주차 위치가 여기에 표시됩니다</div></div>`;
+    return;
+  }
+  el.innerHTML = data.map(p => histItemHtml(p)).join('<div class="divider"></div>');
+}
+
+// ── UTILS ──
+function pad(n) { return String(Math.floor(n)).padStart(2,'0'); }
+function fmtTime(ts) {
+  return new Date(ts).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+// init
+renderHome();
+</script>
+</body>
+</html>
